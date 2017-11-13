@@ -45,7 +45,7 @@ typedef struct
 // resource table
 typedef struct
 {
-	resource_dt* table[NUMRESOURCES];	
+	resource_dt table[NUMRESOURCES];	
 } resource_table;
 
 #endif

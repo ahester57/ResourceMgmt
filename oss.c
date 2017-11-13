@@ -611,7 +611,7 @@ initsharedtable(const int shmid)
 			newrsc.issharable = 0;
 		newrsc.instances = (int)rand() % 10 + 1;
 		newrsc.available = newrsc.instances;
-		table->table[i] = &newrsc;
+		table->table[i] = newrsc;
 	}
 	return table;
 }

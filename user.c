@@ -121,13 +121,13 @@ main (int argc, char** argv)
 	srand((unsigned)(tm.tv_sec ^ tm.tv_nsec ^ (tm.tv_nsec >> 31)));
 
 	/************** start loop ********************/
-	int B = (int)rand() % BOUND;
+	//int Bwhatisthisforanyway = (int)rand() % BOUND;
 	int reqinterval;
 	// flags
 	int complete = 0;
 	int overonesec = 0;
 	// clock stuff
-	int quantum = BILLION;
+	long int quantum = BILLION * 2;
 	oss_clock_t start;
 	start.sec = clock->sec;
 	start.nsec = clock->nsec;
@@ -179,8 +179,10 @@ main (int argc, char** argv)
 		|| (nextreq.sec < clock->sec)) {
 		// pick a resource
 		int reqnum = (int)rand() % NUMRESOURCES;
-
-		fprintf(stderr, "USER: %ld requests something.\n", pid);
+		if (requestresource(table, reqnum, pid) == -1) {
+			fprintf(stderr,"Failed to request resource.\n");
+		}
+		fprintf(stderr,"USER: %ld requests res %d.\n", pid, reqnum);
 		reqinterval = (int)rand() % (BILLION / 4);
 		nextreq = calcendtime(*clock, reqinterval);
 
