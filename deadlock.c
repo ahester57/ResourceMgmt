@@ -59,10 +59,6 @@ requestresource(resource_table* table, const int reqnum,
 {
 	resource_dt* tab = table->table;
 	resource_dt res = tab[reqnum]; 
-	int i;
-	for (i = 0; i < MAXPROCESSES; i++) {
-		printf("%d\n", res.requests[i]);
-	}
 	int index = findavailableslot(res.requests);
 	if (index == -1)
 		return -1;

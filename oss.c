@@ -59,7 +59,6 @@ $Author: o1-hester $
 int semid;
 struct sembuf mutex[2];
 struct sembuf msgwait[1];
-struct sembuf dispatchwait[1];
 
 // clock
 void updateclock(oss_clock_t* clock);
@@ -177,7 +176,7 @@ main (int argc, char** argv)
 	 *	0 = child shared memory lock
 	 *	1 = log file (oss) i/o lock 
 	 *	2 = msg wait/signal 		     
-	 *	3 = dispatch			*/
+	 *	3 = log file (user)		*/
 	semid = getsemid(skey, 4);
 	if (semid == -1) {
 		perror("OSS: Failed to create semaphore.");
@@ -193,7 +192,6 @@ main (int argc, char** argv)
 	// msgwait for message queues
 	setsembuf(msgwait, 2, -1, 0);
 	// for dispatching processes
-	setsembuf(dispatchwait, 3, -1, 0);
 
 	/************** Set up message queue *********/
 	/* Messages are sent by child when they expire.
@@ -241,7 +239,7 @@ main (int argc, char** argv)
 	// Any more are created later in parent code block.
 	long cpid = (long)getpid();
 	int childcount = 0;
-	int term = (maxslaves < 18) ? maxslaves : 18;
+	int term = (maxslaves < 2) ? maxslaves : 2;
 	while (childcount < term)
 	{
 		//addtoblock(makenewprocessblock());
@@ -301,7 +299,6 @@ main (int argc, char** argv)
 			return 1;
 		}
 
-		childcount = 0;
 		// The PARENT LOOP
 		int nextuser = 0;
 		while (childcount < 18)
@@ -310,7 +307,9 @@ main (int argc, char** argv)
 			if (childcount < 18) {
 				// wait until next scheduled time
 				while (clock->sec < nextuser){}
-				int ran = (int)(rand()) % 1;
+				cpid = spawnchild(logf);
+				childcount++;
+				int ran = (int)(rand()) % 3;
 				nextuser += ran;
 				if (ran == 0) {
 					usleep(50000);
@@ -318,7 +317,12 @@ main (int argc, char** argv)
 				if (childcount == 18) {
 					break;
 				}
-				childcount++;
+			}
+			if (deadlock(table, NUMRESOURCES, MAXPROCESSES)) {
+				fprintf(stderr, "OSS: THERES A DEADLOCK\n");
+				dprintf(logf, "OSS: THERES A DEADLOCK\n");
+				fprintf(stderr, "OSS: Trying to fix\n");
+				dprintf(logf, "OSS: Trying to fix\n");
 			}
 
 		}
@@ -541,7 +545,7 @@ initsemaphores(int semid)
 		return -1;
 	}
 	// set up dispatch lock
-	if (initelement(semid, 3, 0) == -1) {
+	if (initelement(semid, 3, 1) == -1) {
 		if (semctl(semid, 0, IPC_RMID) == -1)
 			return -1;
 		return -1;

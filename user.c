@@ -36,17 +36,19 @@ $Author: o1-hester $
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <fcntl.h>
 #include "osstypes.h"
 #include "ipchelper.h"
 #include "sighandler.h"
 #include "deadlock.h"
 #define BOUND 250000
+#define FILEPERMS (O_WRONLY | O_TRUNC | O_CREAT)
 
 // id and operations for semaphores
 int semid;
 struct sembuf mutex[2];
 struct sembuf msgsignal[1];
-struct sembuf dispatchsig[1];
+struct sembuf logmutex[2];
 
 oss_clock_t calcendtime(oss_clock_t clock, int quantum);
 oss_clock_t calcusedtime(oss_clock_t start, oss_clock_t clock);
@@ -54,6 +56,8 @@ oss_clock_t* initsharedclock(const key_t shmkey);
 resource_table* initsharedtable(const key_t diskey);
 int sem_wait();
 int sem_signal();
+int log_wait();
+int log_signal();
 int initsemaphores(const key_t skey);
 int initsighandler();
 
@@ -120,6 +124,14 @@ main (int argc, char** argv)
 	clock_gettime(CLOCK_MONOTONIC, &tm);
 	srand((unsigned)(tm.tv_sec ^ tm.tv_nsec ^ (tm.tv_nsec >> 31)));
 
+	// open log file
+	char* fname = "child.log";
+	int logf = open(fname, FILEPERMS, PERM);
+	if (logf == -1) {
+		perror("OSS: Could not open log file:");
+		return 1;
+	}
+
 	/************** start loop ********************/
 	//int Bwhatisthisforanyway = (int)rand() % BOUND;
 	int reqinterval;
@@ -135,7 +147,14 @@ main (int argc, char** argv)
 	reqinterval = (int)rand() % (BILLION / 4);
 	oss_clock_t nextreq = calcendtime(start, reqinterval);
 
+	if (log_wait() == -1) {
+		return 1;
+	}
 	fprintf(stderr,"USER:[%ld] start:%d,%d\n",pid,start.sec,start.nsec);
+	dprintf(logf,"USER:[%ld] start:%d,%d\n",pid,start.sec,start.nsec);
+	if (log_signal() == -1) {
+		return 1;
+	}
 	do {
 
 	if (clock == NULL || table == NULL) {
@@ -172,7 +191,14 @@ main (int argc, char** argv)
 		|| (end.sec < clock->sec)) {
 		// child's time is up
 		overonesec = 1;
+		if (log_wait() == -1) {
+			return 1;
+		}
 		fprintf(stderr, "USER: %ld second up.\n", pid);
+		dprintf(logf, "USER: %ld second up.\n", pid);
+		if (log_signal() == -1) {
+			return 1;
+		}
 	}
 	// request some resource
 	if ((nextreq.sec <= clock->sec && nextreq.nsec <= clock->nsec)
@@ -182,7 +208,14 @@ main (int argc, char** argv)
 		if (requestresource(table, reqnum, pid) == -1) {
 			fprintf(stderr,"Failed to request resource.\n");
 		}
+		if (log_wait() == -1) {
+			return 1;
+		}
 		fprintf(stderr,"USER: %ld requests res %d.\n", pid, reqnum);
+		dprintf(logf,"USER: %ld requests res %d.\n", pid, reqnum);
+		if (log_signal() == -1) {
+			return 1;
+		}
 		reqinterval = (int)rand() % (BILLION / 4);
 		nextreq = calcendtime(*clock, reqinterval);
 
@@ -207,8 +240,14 @@ main (int argc, char** argv)
 	if (overonesec) {
 		complete = (int)(rand()) % 2;
 		if (complete) {
+			if (log_wait() == -1) {
+				return 1;
+			}
 			fprintf(stderr, "USER: Hey im done %ld\n", pid);
-			//dispatch->done = 1;
+			dprintf(logf, "USER: Hey im done %ld\n", pid);
+			if (log_signal() == -1) {
+				return 1;
+			}
 			sendmessage(msgid, pid, end, *clock);
 			// signal parent that a new message is available
 			if (semop(semid, msgsignal, 1) == -1) {
@@ -218,11 +257,6 @@ main (int argc, char** argv)
 			break;	// out of main do{}while
 		}
 	}
-
-	//if (semop(semid, dispatchsig, 1) == -1) {
-	//	perror("USER: Failed to signal dispatcher");
-	//	return 1;
-	//}
 
 	} while (!complete); // end whole do{}while
 	
@@ -326,6 +360,32 @@ sem_signal()
 	return 0;
 }
 
+// Semaphore blocking wait, return -1 on error
+int
+log_wait()
+{
+	if (semop(semid, logmutex, 1) == -1) {
+		if (errno == EIDRM) {
+			perror("CHILD: Interrupted");
+			return -1;
+		}
+		perror("CHILD: Failed to lock shared memory.");
+		return -1;	
+	}
+	return 0;
+}
+
+// Semaphore signal, return -1 on error
+int
+log_signal()
+{
+	if (semop(semid, logmutex+1, 1) == -1) { 		
+		perror("CHILD: Failed to unlock semid.");
+		return -1;
+	}
+	return 0;
+}
+
 // initialize semaphore operations
 int
 initsemaphores(const key_t skey)
@@ -344,8 +404,8 @@ initsemaphores(const key_t skey)
 	setsembuf(mutex+1, 0, 1, 0);
 	// msgsignal for letting parent know when message is available
 	setsembuf(msgsignal, 2, 1, 0);
-	// for signaling parent to dispatch another guy
-	setsembuf(dispatchsig, 3, 1, 0);
+	setsembuf(logmutex, 3, -1, 0);
+	setsembuf(logmutex+1, 3, 1, 0);
 	return 0;
 }
 // initialize signal handler, return -1 on error
