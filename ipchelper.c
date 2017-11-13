@@ -27,9 +27,9 @@ $Author: o1-hester $
 static int sem_id;
 static int msg_id;
 static int shm_clock_id;
-static int shm_dispatch_id;
+static int shm_table_id;
 static oss_clock_t* shm_clock_addr;
-static resource_table* shm_dispatch_addr;
+static resource_table* shm_table_addr;
 
 // Initializes semaphore with id, num, and value
 // returns -1 on failure
@@ -83,11 +83,11 @@ getclockshmid(const key_t shmkey)
 int
 gettableshmid(const key_t shmkey)
 {
-	shm_dispatch_id = shmget(shmkey, sizeof(pxs_cb_t), PERM|IPC_CREAT);
-	if (shm_dispatch_id == -1) {
+	shm_table_id = shmget(shmkey, sizeof(pxs_cb_t), PERM|IPC_CREAT);
+	if (shm_table_id == -1) {
 		return -1;
 	}
-	return shm_dispatch_id;
+	return shm_table_id;
 }
 
 // gets shared memory (read only), returns -1 on error and shmid on success
@@ -121,11 +121,11 @@ attachshmclock(const int shmid)
 resource_table*
 attachshmtable(const int shmid)
 {
-	shm_dispatch_addr = (resource_table*)shmat(shmid, NULL, 0);
-	if (shm_dispatch_addr == (void*)-1) {
+	shm_table_addr = (resource_table*)shmat(shmid, NULL, 0);
+	if (shm_table_addr == (void*)-1) {
 		return (void*)-1;
 	}
-	return shm_dispatch_addr;
+	return shm_table_addr;
 }
 
 //set up a semaphore operation
@@ -222,7 +222,7 @@ removeshmem(int msgid, int semid, int shmid, void* shmaddr)
 	// kill semaphore set
 	msg = "IPC: Killing shared memory segments.\n";
 	write(STDERR_FILENO, msg, 37);
-	if (detachandremove(shm_dispatch_id, shm_dispatch_addr) == -1) {
+	if (detachandremove(shm_table_id, shm_table_addr) == -1) {
 		error = errno;
 	}
 	if (detachandremove(shmid, shmaddr) == -1) {

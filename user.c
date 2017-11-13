@@ -110,34 +110,30 @@ main (int argc, char** argv)
 		return 1;
 	}
 
-	/************** Wait until dispatched **********/
-	int complete = 0;
-	do {
-
-	usleep(50000);	
-	//while (myid != dispatch->proc_id)
-	//{
-		if (clock == NULL || dispatch == NULL) {
-			perror("USER: Shared memory corrupt.");
-			return 1;
-		}
-	//}
-
 	// seed random 
 	struct timespec tm;
 	clock_gettime(CLOCK_MONOTONIC, &tm);
 	srand((unsigned)(tm.tv_sec ^ tm.tv_nsec ^ (tm.tv_nsec >> 31)));
 
-	/********* Get values from pxs cntl block ******/
-	//fprintf(stderr,"im on!\t%d\n", dispatch->proc_id);
-	// get time quantum 
-	int quantum = 10000;//dispatch->quantum;
-	// decide to use entire | partial quantum
-	int entirequant = (int)(rand()) % 2;
-	if (!entirequant) {
-		int partial = (int)(rand()) % quantum;
-		quantum = partial;
+	/************** start loop ********************/
+	// flags
+	int complete = 0;
+	int overonesec = 0;
+	do {
+
+	if (clock == NULL || dispatch == NULL) {
+		perror("USER: Shared memory corrupt.");
+		return 1;
 	}
+
+
+	/********* Get values from pxs cntl block ******/
+
+	//fprintf(stderr,"im on!\t%d\n", dispatch->proc_id);
+	//
+	// get time quantum 
+	int quantum = BILLION;
+
 	// calculate endtime based on quantum, reading from oss_clock 
 	oss_clock_t start;
 	start.sec = clock->sec;
@@ -155,8 +151,8 @@ main (int argc, char** argv)
 	/**************** Child loop **************/
 	// begin looping over critical section
 	// where each child checks the clock in shmem
-	while (expiry != 1)
-	{	
+	//while (expiry != 1)
+	//{	
 	/************ Entry section ***************/	
 	// wait until your turn
 
@@ -176,6 +172,7 @@ main (int argc, char** argv)
 	if ((end.sec <= clock->sec && end.nsec <= clock->nsec)
 		|| (end.sec < clock->sec)) {
 		// child's time is up
+		overonesec = 1;
 		expiry = 1;
 	}
 	/*********** Exit section **************/
@@ -193,16 +190,15 @@ main (int argc, char** argv)
 		perror("CHILD: Failed setting signal mask.");
 		return 1;
 	} 
-	} // end while
+	//} // end while
 
 	// calculate and set used cpu time
 	usedtime = calcusedtime(start, *clock);
 	//dispatch->used_cpu_time += usedtime.nsec;
 
 
-	// decide if complete after 50 ms
-	//if (dispatch->used_cpu_time > 50000000) {
-	if (1 == 1) {
+	// decide if terminate after 1s
+	if (overonesec) {
 		complete = (int)(rand()) % 2;
 		if (complete) {
 			fprintf(stderr, "USER: Hey im done %d\n", myid);
@@ -213,16 +209,16 @@ main (int argc, char** argv)
 				perror("CHILD: Failed to signal parent.");
 				return 1;	
 			}
-			break;
+			break;	// out of main do{}while
 		}
 	}
 
-	if (semop(semid, dispatchsig, 1) == -1) {
-		perror("USER: Failed to signal dispatcher");
-		return 1;
-	}
+	//if (semop(semid, dispatchsig, 1) == -1) {
+	//	perror("USER: Failed to signal dispatcher");
+	//	return 1;
+	//}
 
-	} while (!complete); // end whole wile
+	} while (!complete); // end whole do{}while
 	
 
 	// detach shared memory

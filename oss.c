@@ -50,10 +50,7 @@ $Author: o1-hester $
 #include "ipchelper.h"
 #include "sighandler.h"
 #include "deadlock.h"
-//#include "procsched.h"
-//#include "proccntl.h"
 #define FILEPERMS (O_WRONLY | O_TRUNC | O_CREAT)
-//#define MAXPROCESSES 18
 
 // id and operations for semaphores
 int semid;
@@ -220,13 +217,13 @@ main (int argc, char** argv)
 		perror("OSS: Failed to attach shared memory.");	
 		return 1;
 	}
-	int disid = gettableshmid(diskey);
-	if (disid == -1) {
+	int tabid = gettableshmid(diskey);
+	if (tabid == -1) {
 		perror("OSS: Failed to create shared memory segment.");
 		return 1;
 	}	
-	resource_table* dispatch = initsharedtable(disid);
-	if (dispatch == (void*)-1) {
+	resource_table* table = initsharedtable(tabid);
+	if (table == (void*)-1) {
 		perror("OSS: Failed to attach shared memory.");	
 		return 1;
 	}
@@ -333,11 +330,8 @@ main (int argc, char** argv)
 		 * with pthread_join( "clock thread id" );
 		 * lets message thread deal with its queue */
 		fprintf(stderr, "OSS: Stopping clock now.\n");
+		int sp = clock->sec;
 		pthread_cancel(ctid);
-		//if (pthread_join(ctid, NULL) != 0) {
-		//	perror("OSS: Failed to join clock thread.");
-		//	return 1;
-		//}
 		
 		// close message listening thread
 		pthread_cancel(tid);
@@ -345,8 +339,8 @@ main (int argc, char** argv)
 		// output stuff
 		fprintf(stderr, "OSS: All children accounted for\n");
 		dprintf(logf, "OSS: All children accounted for\n");
-		fprintf(stderr, "OSS: Internal clock reached 38s.\n");
-		dprintf(logf, "OSS: Internal clock reached 38s.\n");
+		fprintf(stderr, "OSS: Internal clock reached %ds.\n", sp);
+		dprintf(logf, "OSS: Internal clock reached %ds.\n", sp);
 		fprintf(stderr, "OSS: Message thread closed.\n");
 		dprintf(logf, "OSS: Message thread closed.\n");
 		fprintf(stderr, "OSS: Filename for log: %s\n", fname);
@@ -397,10 +391,11 @@ deadlock(const resource_table* restable, int m, int n)
 	for (p = 0; p < n; p++) {
 		if (finish[p])
 			continue;
-		if (requestavailable(restable, request) ) {
+		if (requestavailable(restable, 1, p, i) ) {
 			finish[p] = 1;
 			for (i = 0; i < m; i++) {
-				work[i] += allocated[p*m+i];
+				resource_dt* res = restable->table[i];
+				work[i] += res->allocation[p];
 			}
 			p = -1;
 		}
@@ -641,15 +636,26 @@ initsharedclock(const int shmid)
 resource_table*
 initsharedtable(const int shmid)
 {
-	resource_table* dispatch;
-	dispatch = attachshmtable(shmid);
-	if (dispatch == (void*)-1) {
+	resource_table* table;
+	table = attachshmtable(shmid);
+	if (table == (void*)-1) {
 		// failed to init shm
 		return (void*)-1;
 	}
-	//dispatch->proc_id = -1;
-	//dispatch->quantum = 100000;
-	return dispatch;
+	int i,j;
+	for (i = 0; i < NUMRESOURCES; i++) {
+		resource_dt newrsc;
+		for (j = 0; j < MAXPROCESSES; j++) {
+			newrsc.requests[j] = -1;
+			newrsc.allocation[j] = -1;
+			newrsc.release[j] = -1;
+		}
+		newrsc.issharable = (int)rand() % 2;
+		newrsc.instances = (int)rand() % 10 + 1;
+		newrsc.available = newrsc.instances;
+		table->table[i] = &newrsc;
+	}
+	return table;
 }
 
 // when the user dun goofs

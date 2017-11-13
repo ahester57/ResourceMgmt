@@ -3,6 +3,8 @@
 
 #define LINESIZE 256
 #define BILLION 1000000000
+#define MAXPROCESSES 18
+#define NUMRESOURCES 20
 
 // for message queues
 typedef struct
@@ -32,9 +34,9 @@ typedef struct
 // resource descriptor
 typedef struct
 {
-	unsigned int requests[18];
-	unsigned int allocation[18];
-	unsigned int release[18];
+	unsigned int requests[MAXPROCESSES];
+	unsigned int allocation[MAXPROCESSES];
+	unsigned int release[MAXPROCESSES];
 	int issharable;
 	int instances;
 	int available;
@@ -43,7 +45,7 @@ typedef struct
 // resource table
 typedef struct
 {
-	resource_dt* table[20];	
+	resource_dt* table[NUMRESOURCES];	
 } resource_table;
 
 #endif

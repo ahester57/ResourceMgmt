@@ -24,7 +24,6 @@ $Author: o1-hester $
 #include "osstypes.h"
 #include "ipchelper.h"
 #include "proccntl.h"
-#include "procsched.h"
 #include "sighandler.h"
 
 // whether the alarm occured, for outputting why its over
