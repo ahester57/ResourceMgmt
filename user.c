@@ -1,8 +1,11 @@
 /*
-$Id: user.c,v 1.2 2017/10/26 03:30:40 o1-hester Exp o1-hester $
-$Date: 2017/10/26 03:30:40 $
-$Revision: 1.2 $
+$Id: user.c,v 1.3 2017/11/13 04:00:18 o1-hester Exp o1-hester $
+$Date: 2017/11/13 04:00:18 $
+$Revision: 1.3 $
 $Log: user.c,v $
+Revision 1.3  2017/11/13 04:00:18  o1-hester
+soon to be
+
 Revision 1.2  2017/10/26 03:30:40  o1-hester
 glad its over
 
@@ -36,7 +39,8 @@ $Author: o1-hester $
 #include "osstypes.h"
 #include "ipchelper.h"
 #include "sighandler.h"
-//#include "filehelper.h"
+#include "deadlock.h"
+#define BOUND 250000
 
 // id and operations for semaphores
 int semid;
@@ -61,7 +65,6 @@ int
 main (int argc, char** argv)
 {
 	fprintf(stderr, "yo\n");
-	unsigned int myid = atoi(argv[1]);
 	// get keys from file
 	key_t mkey, skey, shmkey, diskey;
 	mkey = ftok(KEYPATH, MSG_ID);
@@ -79,6 +82,8 @@ main (int argc, char** argv)
 		return 1;
 	}
 
+	long pid = (long)getpid();
+	fprintf(stderr, "USER: %ld begin.\n", pid);
 	/***************** Set up shared memory *******/
 	// Child has read-only permissions on shm
 	oss_clock_t* clock = initsharedclock(shmkey);
@@ -86,8 +91,8 @@ main (int argc, char** argv)
 		perror("USER: Failed to attach shared memory.");	
 		return 1;
 	}
-	resource_table* dispatch = initsharedtable(diskey);
-	if (dispatch == (void*)-1) {
+	resource_table* table = initsharedtable(diskey);
+	if (table == (void*)-1) {
 		perror("USER: Failed to attach shared memory.");	
 		return 1;
 	}
@@ -116,43 +121,36 @@ main (int argc, char** argv)
 	srand((unsigned)(tm.tv_sec ^ tm.tv_nsec ^ (tm.tv_nsec >> 31)));
 
 	/************** start loop ********************/
+	int B = (int)rand() % BOUND;
+	int reqinterval;
 	// flags
 	int complete = 0;
 	int overonesec = 0;
+	// clock stuff
+	int quantum = BILLION;
+	oss_clock_t start;
+	start.sec = clock->sec;
+	start.nsec = clock->nsec;
+	oss_clock_t end = calcendtime(*clock, quantum);
+	reqinterval = (int)rand() % (BILLION / 4);
+	oss_clock_t nextreq = calcendtime(start, reqinterval);
+
+	fprintf(stderr,"USER:[%ld] start:%d,%d\n",pid,start.sec,start.nsec);
 	do {
 
-	if (clock == NULL || dispatch == NULL) {
+	if (clock == NULL || table == NULL) {
 		perror("USER: Shared memory corrupt.");
 		return 1;
 	}
 
 
 	/********* Get values from pxs cntl block ******/
-
-	//fprintf(stderr,"im on!\t%d\n", dispatch->proc_id);
-	//
-	// get time quantum 
-	int quantum = BILLION;
-
-	// calculate endtime based on quantum, reading from oss_clock 
-	oss_clock_t start;
-	start.sec = clock->sec;
-	start.nsec = clock->nsec;
-	oss_clock_t end = calcendtime(*clock, quantum);
-	oss_clock_t usedtime;	// for later
 	
 
-	int expiry = 0; // flag for done
-	long pid = (long)getpid();
-	
-	// output endtime to stderr
-	fprintf(stderr,"USER:[%d] start:%d,%d\n",myid,start.sec,start.nsec);
-	
 	/**************** Child loop **************/
 	// begin looping over critical section
 	// where each child checks the clock in shmem
-	//while (expiry != 1)
-	//{	
+	
 	/************ Entry section ***************/	
 	// wait until your turn
 
@@ -169,11 +167,23 @@ main (int argc, char** argv)
 		return 1;
 	} 
 	/************ Critical section ***********/
+	// set flag when 1 second is up
 	if ((end.sec <= clock->sec && end.nsec <= clock->nsec)
 		|| (end.sec < clock->sec)) {
 		// child's time is up
 		overonesec = 1;
-		expiry = 1;
+		fprintf(stderr, "USER: %ld second up.\n", pid);
+	}
+	// request some resource
+	if ((nextreq.sec <= clock->sec && nextreq.nsec <= clock->nsec)
+		|| (nextreq.sec < clock->sec)) {
+		// pick a resource
+		int reqnum = (int)rand() % NUMRESOURCES;
+
+		fprintf(stderr, "USER: %ld requests something.\n", pid);
+		reqinterval = (int)rand() % (BILLION / 4);
+		nextreq = calcendtime(*clock, reqinterval);
+
 	}
 	/*********** Exit section **************/
 	// unlock shared memory read 
@@ -190,20 +200,14 @@ main (int argc, char** argv)
 		perror("CHILD: Failed setting signal mask.");
 		return 1;
 	} 
-	//} // end while
-
-	// calculate and set used cpu time
-	usedtime = calcusedtime(start, *clock);
-	//dispatch->used_cpu_time += usedtime.nsec;
-
 
 	// decide if terminate after 1s
 	if (overonesec) {
 		complete = (int)(rand()) % 2;
 		if (complete) {
-			fprintf(stderr, "USER: Hey im done %d\n", myid);
+			fprintf(stderr, "USER: Hey im done %ld\n", pid);
 			//dispatch->done = 1;
-			sendmessage(msgid, myid, end, *clock);
+			sendmessage(msgid, pid, end, *clock);
 			// signal parent that a new message is available
 			if (semop(semid, msgsignal, 1) == -1) {
 				perror("CHILD: Failed to signal parent.");
@@ -222,7 +226,7 @@ main (int argc, char** argv)
 	
 
 	// detach shared memory
-	if (shmdt(dispatch) == -1 || shmdt(clock) == -1) {
+	if (shmdt(table) == -1 || shmdt(clock) == -1) {
 		perror("USER: Failed to detach shared memory.");
 		return 1;
 	}

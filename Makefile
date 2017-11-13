@@ -2,7 +2,7 @@
 CC= gcc
 CFLAGS= -Wall -g
 LDLIBS= -pthread
-COMMONSRCS= sighandler.c ipchelper.c filehelper.c proccntl.c
+COMMONSRCS= sighandler.c ipchelper.c deadlock.c
 OSSSRCS = oss.c
 USERSRCS = user.c
 # or perhaps SOURCES= $(wildcard *.c)
@@ -17,7 +17,7 @@ oss: $(OBJECTS)
 
 user: $(OBJECTS)
 
-$(OBJECTS): sighandler.h ipchelper.h filehelper.h osstypes.h proccntl.h
+$(OBJECTS): sighandler.h ipchelper.h osstypes.h deadlock.h
 
 clean:
 	$(RM) $(OBJECTS) *.o *log oss user

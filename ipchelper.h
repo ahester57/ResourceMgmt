@@ -1,8 +1,11 @@
 /*
-$Id: ipchelper.h,v 1.2 2017/10/26 03:31:00 o1-hester Exp o1-hester $
-$Date: 2017/10/26 03:31:00 $
-$Revision: 1.2 $
+$Id: ipchelper.h,v 1.3 2017/11/13 04:00:34 o1-hester Exp o1-hester $
+$Date: 2017/11/13 04:00:34 $
+$Revision: 1.3 $
 $Log: ipchelper.h,v $
+Revision 1.3  2017/11/13 04:00:34  o1-hester
+soon to be
+
 Revision 1.2  2017/10/26 03:31:00  o1-hester
 ahh
 

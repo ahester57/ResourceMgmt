@@ -1,8 +1,11 @@
 /*
-$Id: oss.c,v 1.2 2017/10/26 03:30:40 o1-hester Exp o1-hester $
-$Date: 2017/10/26 03:30:40 $
-$Revision: 1.2 $
+$Id: oss.c,v 1.3 2017/11/13 04:00:18 o1-hester Exp o1-hester $
+$Date: 2017/11/13 04:00:18 $
+$Revision: 1.3 $
 $Log: oss.c,v $
+Revision 1.3  2017/11/13 04:00:18  o1-hester
+soon to be
+
 Revision 1.2  2017/10/26 03:30:40  o1-hester
 glad its over
 
@@ -307,7 +310,7 @@ main (int argc, char** argv)
 			if (childcount < 18) {
 				// wait until next scheduled time
 				while (clock->sec < nextuser){}
-				int ran = (int)(rand()) % 3;
+				int ran = (int)(rand()) % 1;
 				nextuser += ran;
 				if (ran == 0) {
 					usleep(50000);
@@ -359,54 +362,6 @@ main (int argc, char** argv)
 	return 0;	
 }
 
-// check if request from pnum <= available
-int
-requestavailable(const resource_table* restable, const int req,
-		 const int pnum, const int resnum)
-{
-	resource_dt* res = restable->table[resnum];
-	if (req <= res->available) {
-		return 1;
-	}
-	return 0;
-}
-
-// check if deadlock state
-int
-deadlock(const resource_table* restable, int m, int n)
-{
-	int work[m];	// m resources
-	int finish[n];	// n processes
-
-	int i;
-	for (i = 0; i < m; i++) {
-		resource_dt* res = restable->table[i];
-		work[i] = res->available;
-	}
-	for (i = 0; i < n; i++) {
-		finish[i] = 0;
-	}
-
-	int p;
-	for (p = 0; p < n; p++) {
-		if (finish[p])
-			continue;
-		if (requestavailable(restable, 1, p, i) ) {
-			finish[p] = 1;
-			for (i = 0; i < m; i++) {
-				resource_dt* res = restable->table[i];
-				work[i] += res->allocation[p];
-			}
-			p = -1;
-		}
-	}
-	
-	for (p = 0; p < n; p++) {
-		if (!finish[p]) 
-			break;
-	}
-	return (p != n);
-}
 
 // updates internal system clock
 void
@@ -414,7 +369,7 @@ updateclock(oss_clock_t* clock)
 {
 	if (clock == NULL)
 		return;
-	clock->nsec += 50;
+	clock->nsec += 25;
 	if (clock->nsec >= BILLION) {
 		clock->sec += 1;
 		clock->nsec = 0;
@@ -650,7 +605,10 @@ initsharedtable(const int shmid)
 			newrsc.allocation[j] = -1;
 			newrsc.release[j] = -1;
 		}
-		newrsc.issharable = (int)rand() % 2;
+		if ( (int)rand() % 10 < 2 )
+			newrsc.issharable = 1;
+		else
+			newrsc.issharable = 0;
 		newrsc.instances = (int)rand() % 10 + 1;
 		newrsc.available = newrsc.instances;
 		table->table[i] = &newrsc;

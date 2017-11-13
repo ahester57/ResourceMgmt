@@ -1,8 +1,11 @@
 /*
-$Id: sighandler.c,v 1.1 2017/10/23 07:27:24 o1-hester Exp o1-hester $
-$Date: 2017/10/23 07:27:24 $
-$Revision: 1.1 $
+$Id: sighandler.c,v 1.2 2017/11/13 04:00:18 o1-hester Exp o1-hester $
+$Date: 2017/11/13 04:00:18 $
+$Revision: 1.2 $
 $Log: sighandler.c,v $
+Revision 1.2  2017/11/13 04:00:18  o1-hester
+soon to be
+
 Revision 1.1  2017/10/23 07:27:24  o1-hester
 Initial revision
 
